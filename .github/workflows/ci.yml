@@ -1,0 +1,48 @@
+name: Test and package
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install '.[all,dev]'
+      - run: python -m ruff check manage.py src tests examples tools
+      - run: python -m ruff format --check manage.py src tests examples tools
+      - run: python -m pyright src/industrial_connect tests/typing/db_usage.py examples
+      - run: python -m pytest -q
+        env:
+          IC_TEST_SERVICES: opcua
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions-${{ matrix.os }}-${{ matrix.python }}
+          path: dist/*
+
+  isolated-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install build
+      - run: python -m build
+      - name: Install every extra in a fresh environment
+        run: python tools/check_extras.py

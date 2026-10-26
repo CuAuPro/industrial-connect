@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "industrial-connect"
+version = "0.1.0"
+description = "Small, independently usable industrial Python connectors"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+env = ["python-dotenv>=1.2.4,<2"]
+postgres = ["psycopg[binary]>=3.3.6,<4", "psycopg-pool>=3.3.3,<4"]
+oracle = ["oracledb>=26.0.1,<27"]
+mssql = ["pymssql>=2.4.5,<3"]
+questdb = ["questdb>=6.0,<7"]
+sqlite = []
+opcua = ["asyncua>=2.1,<3"]
+mqtt = ["paho-mqtt>=2.1,<3"]
+graylog = ["graypy>=2.1,<3"]
+db = ["industrial-connect[postgres,oracle,mssql,questdb,sqlite]==0.1.0"]
+all = ["industrial-connect[db,opcua,mqtt,graylog,env]==0.1.0"]
+dev = ["pytest>=8.3,<10", "build>=1.2,<2", "twine>=6,<7", "ruff>=0.14,<1", "pyright>=1.1.414,<2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+industrial_connect = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["integration: opt-in disposable service tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]
+

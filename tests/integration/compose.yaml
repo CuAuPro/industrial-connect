@@ -1,0 +1,45 @@
+# Disposable test services only. Ports are bound exclusively to loopback.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: industrial
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: ${IC_TEST_PASSWORD:?Set a disposable test password}
+    ports: ["127.0.0.1:15432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d industrial"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    environment:
+      ORACLE_PASSWORD: ${IC_TEST_PASSWORD:?Set a disposable test password}
+      APP_USER: appuser
+      APP_USER_PASSWORD: ${IC_TEST_PASSWORD:?Set a disposable test password}
+    ports: ["127.0.0.1:11521:1521"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${IC_TEST_PASSWORD:?Set a strong disposable test password}
+    ports: ["127.0.0.1:11433:1433"]
+  questdb:
+    image: questdb/questdb:10.1.0
+    environment:
+      QDB_HTTP_USER: admin
+      QDB_HTTP_PASSWORD: ${IC_TEST_PASSWORD:?Set a disposable test password}
+    ports: ["127.0.0.1:19000:9000"]
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports: ["127.0.0.1:11883:1883"]
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
