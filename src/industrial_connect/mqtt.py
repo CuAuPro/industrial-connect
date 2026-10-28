@@ -1,7 +1,11 @@
+import json
 import ssl
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
 from inspect import iscoroutinefunction
+from math import isfinite
 from queue import Full, Queue
 from threading import Event, RLock, Thread, current_thread
 from typing import Any
@@ -14,6 +18,69 @@ from .errors import ConnectionError, DependencyError, OperationError, _cleanup
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class Uom(StrEnum):
+    """Common unit labels for measurement packets; no unit conversion is performed."""
+
+    mm = "mm"
+    cm = "cm"
+    m = "m"
+    km = "km"
+    g = "g"
+    kg = "kg"
+    tonne = "t"
+    s = "s"
+    min = "min"
+    h = "h"
+    degC = "degC"
+    degF = "degF"
+    K = "K"
+    Pa = "Pa"
+    kPa = "kPa"
+    bar = "bar"
+    percent = "%"
+    rpm = "rpm"
+    Hz = "Hz"
+    V = "V"
+    A = "A"
+    W = "W"
+    kW = "kW"
+    kWh = "kWh"
+
+
+@dataclass(frozen=True, kw_only=True)
+class MqttPacket:
+    """Optional JSON convention for one measurement, identified by its MQTT topic."""
+
+    value: str | int | float | bool | None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    uom: Uom | str | None = None
+
+    def __post_init__(self):
+        if self.value is not None and not isinstance(self.value, (str, int, float, bool)):
+            raise TypeError("value must be a string, integer, finite float, boolean or None")
+        if isinstance(self.value, float) and not isfinite(self.value):
+            raise ValueError("value must be finite")
+        if not isinstance(self.timestamp, datetime):
+            raise TypeError("timestamp must be a datetime")
+        if self.timestamp.utcoffset() is None:
+            raise ValueError("timestamp must be timezone-aware")
+        if self.uom is not None:
+            if not isinstance(self.uom, str):
+                raise TypeError("uom must be a Uom member, string or None")
+            if not self.uom.strip():
+                raise ValueError("uom must not be blank")
+
+    def to_json(self) -> str:
+        """Serialize with a UTC timestamp and omit the unit when absent."""
+        payload = {
+            "value": self.value,
+            "timestamp": self.timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        }
+        if self.uom is not None:
+            payload["uom"] = self.uom
+        return json.dumps(payload, allow_nan=False)
 
 
 @dataclass(frozen=True, kw_only=True)

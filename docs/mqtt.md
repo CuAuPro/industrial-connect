@@ -1,69 +1,100 @@
 # MQTT
 
-Install `industrial-connect[mqtt,env]` and configure `MQTT_HOST`,
-`MQTT_USERNAME`, `MQTT_PASSWORD`, and `MQTT_CA_FILE`
-when using a private CA. Every `MqttConfig` field uses the `MQTT_` prefix.
+Install `industrial-connect[mqtt,env]`. Set `MQTT_HOST` and, as needed,
+`MQTT_USERNAME`, `MQTT_PASSWORD` and `MQTT_CA_FILE` in `.env`.
+All `MqttConfig` fields use the `MQTT_` environment prefix.
 
-`client_id` is optional: each new config generates its own 23-character ID when
-omitted. That ID stays the same when the client reconnects. Set `client_id` or
-`MQTT_CLIENT_ID` explicitly for a stable application identity across restarts;
-concurrent connections must have distinct IDs. Explicit empty IDs are rejected.
+## Publish: typed packets, custom JSON or raw
 
-```shell
-python -m examples.mqtt --env-file .env --duration 30
-python -m examples.mqtt --env-file .env --duration 10 --publish-demo
+`publish()` accepts strings or bytes. Serialize dictionaries with `json.dumps()`;
+`MqttPacket` is optional. No subscription is needed.
+
+```python
+import json
+
+from industrial_connect.mqtt import MqttClient, MqttConfig, MqttPacket, Uom
+
+with MqttClient(MqttConfig.from_env(env_file=".env")) as client:
+    # One measurement per topic, with timestamp and unit.
+    packet = MqttPacket(value=72.5, uom=Uom.degC)
+    client.publish("plant/mill-1/temperature", packet.to_json(), qos=1, wait=True)
+
+    # Custom key:value JSON: choose your own keys and structure.
+    client.publish("plant/status", json.dumps({"running": True, "speed": 120}), wait=True)
+
+    # Raw text or bytes.
+    client.publish("plant/message", "hello", wait=True)
+    client.publish("plant/raw", b"\x01\x02", wait=True)
 ```
 
-[The example](../examples/mqtt.py) subscribes at QoS 1 to
-`industrial-connect/examples/temperature` (override with `--topic`). It validates JSON
-objects containing `equipment_id`, finite numeric `temperature_c` and offset-aware
-`observed_at`. Invalid messages are rejected without logging their payloads. It uses
-bounded waits, closes on Ctrl+C and fails if its notification queue overflowed.
-`--publish-demo` explicitly sends one non-retained telemetry message; no control topic
-is used. A finite monitoring window can contain no messages and still exit successfully.
+`wait=True` finishes each publish before closing, bounded by `config.timeout`.
+For QoS 1 this waits for the broker acknowledgement; QoS 0 completion does not
+confirm receipt. A timeout does not cancel a queued publish.
 
+### Measurement format and units
 
-`MqttClient(MqttConfig(host=..., client_id=...))` provides `start()`, `connect()`,
-`subscribe(topic, qos=0)`, `unsubscribe(topic)`, `publish(topic, payload, qos=0,
-retain=False, wait=False)`, and `close()`/`stop()`. MQTT 3.1.1 uses Paho callback API v2 and
-its network thread. Client IDs must be unique among concurrently connected applications.
+`MqttPacket` is this library's optional application payload convention. The topic
+identifies the measurement. Example JSON:
 
-TLS is enabled by default on port 8883 with certificate and hostname verification.
-Configure `ca_file`, and optionally `cert_file`/`key_file` for mutual TLS, plus
-`username`/`password` as needed. Local plaintext tests must explicitly use `tls=False`
-and the broker's plaintext port.
+```json
+{"value": 72.5, "timestamp": "2026-10-28T10:00:00Z", "uom": "degC"}
+```
 
-Register subscriptions before `start()` or subscribe while connected. They are replayed
-after reconnect. A subscribe call accepts the local request; a later broker rejection is
-reported in `last_error`. Messages preserve topic, raw bytes, QoS and retain metadata.
-Applications own JSON decoding and schema validation.
+- `value`: string, integer, finite float, boolean or `None` (JSON `null`).
+- `timestamp`: defaults to current UTC; an explicit timezone-aware `datetime` is
+  converted to UTC ISO 8601 with `Z`, preserving microseconds.
+- `uom`: `Uom` member or custom nonblank string; omitted from JSON when `None`.
 
-`publish()` returns Paho's `MQTTMessageInfo` immediately by default. Use `wait=True`
-to wait up to `config.timeout` for completion of that message. The timeout is an upper
-bound, not a delay. A timeout does not cancel a queued publish. QoS 0 completion
-does not mean the broker or application received the message. Paho can retransmit
-in-flight messages on reconnect; the wrapper adds no replay, durable sessions, or
-exactly-once guarantee. Finish publishes before closing. See
-[Paho's documented delivery limitations](https://eclipse.dev/paho/clients/python/docs/).
+```python
+from datetime import datetime
 
-For a stream, enqueue messages before waiting for their results so broker round trips
-can overlap. The defaults allow pipelining while bounding the QoS 1/2 backlog:
+packet = MqttPacket(
+    value=125,
+    timestamp=datetime.fromisoformat("2026-10-28T11:00:00+01:00"),
+    uom=Uom.mm,
+)
+custom = MqttPacket(value=120, uom="widgets/hour")
+unitless = MqttPacket(value=True)
+```
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `max_inflight_messages` | `1000` | QoS 1/2 messages awaiting acknowledgement simultaneously. |
-| `max_queued_messages` | `20000` | Total outstanding QoS 1/2 messages, including in-flight messages. |
+`Uom` is a string enum with autocomplete. `Uom("t")` looks up a member by value;
+iterate over `Uom` to list units. JSON values match names except where shown:
 
-The larger window helps sustain throughput over connections with higher latency;
-the queue absorbs short bursts. These are message counts, so memory use also depends
-on payload size. QoS 0 is unaffected by these limits. A full queue raises
-`OperationError` immediately rather than waiting for space.
+| Category | Members |
+| --- | --- |
+| Length | `mm`, `cm`, `m`, `km` |
+| Mass | `g`, `kg`, `tonne` → `"t"` (metric ton) |
+| Time | `s`, `min`, `h` |
+| Temperature | `degC`, `degF`, `K` |
+| Pressure | `Pa`, `kPa`, `bar` |
+| Other | `percent` → `"%"`, `rpm`, `Hz`, `V`, `A`, `W`, `kW`, `kWh` |
 
-Override them in `MqttConfig(...)` or with `MQTT_MAX_INFLIGHT_MESSAGES` and
-`MQTT_MAX_QUEUED_MESSAGES` when using `MqttConfig.from_env()`. Both accept 0 for
-unlimited, matching Paho. Throughput still depends on the broker and connection.
-Topic validation is delegated to Paho;
-filters registered before connection are checked when sent to the driver.
+Packets are frozen and keyword-only. Invalid types, nonfinite numbers, naive
+timestamps and blank units are rejected at construction. Units are labels, without
+conversion or dimensional checks. The helper does not parse incoming packets or
+package multiple measurements; use custom JSON for your own structure.
+
+## Connection and delivery
+
+- `with MqttClient(config)` connects and closes automatically. Explicit lifecycle:
+  `start()`/`connect()` and `close()`/`stop()`.
+- TLS defaults to port 8883 with certificate and hostname verification. Use
+  `ca_file` for a private CA, `cert_file`/`key_file` for mutual TLS and
+  `username`/`password` for authentication. Plaintext requires `tls=False` and
+  the broker's plaintext port.
+- Omitted `client_id` generates a unique 23-character ID, reused on reconnect.
+  Set `client_id`/`MQTT_CLIENT_ID` for an identity across restarts. Concurrent
+  clients need distinct IDs; empty IDs are rejected.
+- `publish(topic, payload, qos=0, retain=False, wait=False)` returns Paho's
+  `MQTTMessageInfo`. Finish publishes before closing. Paho may retransmit on
+  reconnect; the wrapper adds no replay, durable sessions or exactly-once guarantee.
+  See [Paho delivery limitations](https://eclipse.dev/paho/clients/python/docs/).
+- MQTT 3.1.1 uses Paho callback API v2 and its network thread. Topic validation
+  is delegated to Paho; pre-connection filters are checked when sent.
+
+### Publish streams
+
+Queue messages before waiting so broker round trips overlap:
 
 ```python
 with MqttClient(config) as client:
@@ -74,12 +105,24 @@ with MqttClient(config) as client:
             raise TimeoutError("MQTT publish is still unconfirmed")
 ```
 
-This changes the earlier default of `wait=True`; use it explicitly where each call
-must finish before proceeding.
+| Config field | Default | QoS 1/2 limit |
+| --- | --- | --- |
+| `max_inflight_messages` | `1000` | Messages awaiting acknowledgement simultaneously |
+| `max_queued_messages` | `20000` | Total outstanding messages, including in-flight |
 
-## Queue or callback delivery
+Override via `MqttConfig` or `MQTT_MAX_INFLIGHT_MESSAGES` /
+`MQTT_MAX_QUEUED_MESSAGES`; `0` means unlimited. QoS 0 is unaffected. A full queue
+raises `OperationError` immediately. Limits count messages, so payload size affects
+memory use. Throughput depends on broker and connection. The default is `wait=False`;
+set `wait=True` explicitly when each call must complete before proceeding.
 
-Without a callback, use the existing queue:
+## Subscribe: queue or callback
+
+Register subscriptions before connecting or while connected; they replay after
+reconnect. `subscribe(topic, qos=0)` accepts the local request; later broker
+rejections appear in `last_error`. Use `unsubscribe(topic)` to remove one.
+Messages contain topic, raw payload bytes, QoS and retain metadata. Applications
+own JSON decoding and validation.
 
 ```python
 client = MqttClient(config)
@@ -89,52 +132,53 @@ with client:
     print(message.topic, message.payload)
 ```
 
-Or provide a synchronous handler receiving one `MqttMessage`:
+Or supply a synchronous handler receiving one `MqttMessage`:
 
 ```python
 import time
 
+
 def on_message(message):
     print(message.topic, message.payload)
+
 
 client = MqttClient(config, on_message=on_message)
 client.subscribe("plant/temperature", qos=1)
 with client:
-    time.sleep(30)  # Your application runs while the worker handles messages.
+    time.sleep(30)
 ```
 
-The handler runs sequentially on an owned worker thread, outside Paho's network
-thread. It can publish or use a database client; share application state with proper
-synchronization and keep the database open until the MQTT worker has stopped.
-Async handlers are not supported. Messages go exclusively to the handler in callback
-mode: `get_notification()` raises `OperationError`, and the public notification queue
-is unused. Choose one mode when constructing the client.
+- Callbacks run sequentially on an owned worker, outside Paho's network thread.
+  They may publish or use a database; synchronize shared state and keep the database
+  open until the worker stops. Async handlers are unsupported.
+- Callback mode delivers exclusively to the handler: `get_notification()` raises
+  `OperationError`, and the public notification queue is unused.
+- Handler exceptions do not stop the worker or retry messages. Monitor
+  `callback_error_count`, `last_callback_error` (which may contain application data)
+  and `last_error` (a safe summary). MQTT acknowledgement does not confirm successful
+  application processing.
+- `close()` waits up to `config.timeout` for an active callback and discards pending
+  callbacks. A blocked handler causes `ConnectionError`; let it finish, then retry
+  closing. Close from the owner thread; calling it inside a callback raises
+  `OperationError`. Published messages cannot be retracted.
+- Both delivery modes use `notification_capacity` (default `1000`), dropping the
+  newest event on overflow and incrementing `dropped_count`. Monitor that counter.
+  Queue mode exposes `notifications` (`queue.Queue`); `get_notification()` times out
+  with `queue.Empty`. Queued events, including control events, remain FIFO across
+  disconnects. Check timestamps/status; stopping does not wake an unbounded wait.
 
-Handler exceptions do not kill the worker or retry the message. Monitor
-`callback_error_count` and `last_callback_error` (the original exception);
-`last_error` receives a safe summary. The exception itself may contain application
-data. The internal callback queue uses `notification_capacity`; when full it drops
-the newest message and increments `dropped_count`, just like queue mode.
-
-`close()` stops reception and waits up to `config.timeout` for an in-flight callback.
-Shutdown does not drain pending callbacks; already published messages
-cannot be retracted. A blocked handler causes `ConnectionError`; let it finish and
-retry `close()`. Call `close()` from the owner thread, not from inside the callback.
-A callback's call to `close()` raises `OperationError`. MQTT acknowledgements do not
-confirm successful application processing; use application idempotency/durability
-when needed.
-
-Run [the callback example](../examples/mqtt_callback.py) with:
+## Runnable examples
 
 ```shell
+python -m examples.mqtt --env-file .env --duration 30
+python -m examples.mqtt --env-file .env --duration 10 --publish-demo
 python -m examples.mqtt_callback --env-file .env --duration 30
 ```
 
-### Notification queues (default mode)
-
-Both MQTT and OPC UA expose `notifications` (a standard `queue.Queue`) and
-`get_notification(timeout=...)`. A timeout raises `queue.Empty`. Queues default to 1000
-events; when full they drop the newest event and increment `dropped_count`, including
-control events. Monitor that counter and size/drain queues appropriately. Existing
-queued events remain in FIFO order across disconnects; inspect timestamps and status.
-Stopping a client does not wake a consumer waiting without a timeout.
+The [queue](../examples/mqtt.py) and [callback](../examples/mqtt_callback.py)
+examples use their own telemetry schema: `equipment_id`, finite `temperature_c`
+and offset-aware `observed_at`. They subscribe at QoS 1 to
+`industrial-connect/examples/temperature` (override with `--topic`), reject invalid
+payloads without logging them, use bounded waits, close on Ctrl+C and fail on queue
+overflow. `--publish-demo` sends one non-retained reading. A monitoring window with
+no messages can still succeed.

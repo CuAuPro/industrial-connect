@@ -6,5 +6,5 @@ from .errors import ConnectionError, DependencyError, IndustrialConnectError, Op
 
 _logging.getLogger(__name__).addHandler(_logging.NullHandler())
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["ConnectionError", "DependencyError", "IndustrialConnectError", "OperationError"]
