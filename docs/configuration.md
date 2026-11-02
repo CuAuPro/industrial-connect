@@ -1,6 +1,16 @@
-# Environment variables or .env files
+# Application configuration and environment overrides
 
-Every connector config supports `from_env()`. Direct constructors still work:
+For applications with YAML/JSON, keep stable non-secret settings there: hosts, ports,
+TLS/security, certificate paths, generation flags and timeouts. Use `from_mapping()` to
+combine those settings with optional credential or deployment environment overrides.
+A `.env` file is not required. Usernames may accompany passwords in the credential file;
+QuestDB credentials are part of its native `QUESTDB_CONF` string.
+
+The standalone examples intentionally use environment-only configuration and have no
+YAML file. Their sample `.env` therefore includes required connection addresses, but
+omits redundant defaults. This is not a second configuration catalog for IPE applications.
+
+Every connector config supports `from_env()`. Direct constructors also work:
 
 ```python
 from industrial_connect.db import OracleClient, OracleConfig, init_database

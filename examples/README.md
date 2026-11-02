@@ -4,7 +4,11 @@ See the [connector index](../README.md#connectors-and-runnable-examples) for one
 example and guide per connector. External database examples read by default; use
 `--initialize --record` only on an approved example database. Copy
 [`.env.example`](.env.example) to your own `.env`, replace placeholders and install
-`env` when passing `--env-file`. Sample values are not production credentials.
+`env` when passing `--env-file`. These standalone examples are environment-only: they
+do not load application YAML. The sample includes required addresses and credentials,
+while optional values use library defaults. Applications with YAML should keep stable
+addresses, TLS settings and certificate paths in that YAML and use `.env` for credentials.
+Sample values are not production credentials.
 
 ## Sharing clients across files and callbacks
 
