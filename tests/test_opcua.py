@@ -303,7 +303,6 @@ def test_secure_client_requires_pinned_cert_and_validates_identity(tmp_path, pol
             certificate=str(cert),
             private_key=str(key),
             server_certificate=str(cert),
-            auto_generate_certificate=False,
         )
     )
     raw = client._make_client()
@@ -341,7 +340,6 @@ def test_pinned_certificate_validator_rejects_another_certificate(tmp_path, poli
             certificate=str(cert),
             private_key=str(key),
             server_certificate=str(cert),
-            auto_generate_certificate=False,
         )
     )
     raw = client._make_client()

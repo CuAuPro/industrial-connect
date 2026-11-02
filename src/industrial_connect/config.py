@@ -28,6 +28,21 @@ class EnvConfig:
                 raise ValueError(f"{field.name} must be a finite number")
 
     @classmethod
+    def from_mapping(cls, values: dict[str, Any], *, prefix: str | None = None) -> Self:
+        """Load structured settings with explicit environment overrides."""
+        names = {item.name for item in fields(cls)}  # type: ignore[arg-type]
+        if unknown := values.keys() - names:
+            raise TypeError(f"Unknown configuration fields: {', '.join(sorted(unknown))}")
+        result = dict(values)
+        hints = get_type_hints(cls)
+        env_prefix = cls._env_prefix if prefix is None else prefix
+        for name in names:
+            key = env_prefix + name.upper()
+            if (raw := os.getenv(key)) is not None:
+                result[name] = _parse(raw, hints[name], key)
+        return cls(**result)
+
+    @classmethod
     def from_env(
         cls, *, env_file: str | Path | None = None, prefix: str | None = None, **overrides: Any
     ) -> Self:

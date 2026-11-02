@@ -49,3 +49,15 @@ See [the sample file](../examples/.env.example). A service-free example is runna
 ```shell
 python -m examples.env_config --env-file examples/.env.example
 ```
+
+## Structured application settings
+
+`Config.from_mapping(settings)` accepts fields from a YAML/JSON dictionary and applies
+process environment overrides above those values, then constructor defaults. Unknown
+fields fail immediately. It performs no file discovery or process-environment mutation.
+Use this when an application owns its configuration file; `from_env()` remains useful
+for environment-only tools and explicitly supplied `.env` files.
+
+```python
+config = MqttConfig.from_mapping({"host": "localhost", "port": 1883, "tls": False})
+```

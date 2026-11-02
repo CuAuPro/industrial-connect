@@ -29,3 +29,27 @@ One client serializes operations across threads. Foreign keys are enabled. Neste
 transactions are rejected. A connection discarded after rollback failure is reopened
 on the next operation; an in-memory database then loses its previous contents. WAL
 mode and filesystem backup/retention are application choices.
+
+## Native connections for application-owned transactions
+
+```python
+import sqlite3
+from industrial_connect.db import SqliteConfig, sqlite_connection
+
+with sqlite_connection(SqliteConfig(database="process.db", timeout=30),
+                       row_factory=sqlite3.Row) as connection:
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute("CREATE TABLE IF NOT EXISTS checkpoint(id INTEGER PRIMARY KEY)")
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+```
+
+The context owns opening/closing, foreign keys and connection timeout. It neither
+begins nor commits transactions; the default is native SQLite autocommit. Closing rolls
+back unfinished transactions. Do not retain a connection outside its context or share it
+between operations. `SqliteClient` provides the higher-level serialized transaction API
+and retains its connection for `:memory:` databases. Both use the same connection setup.

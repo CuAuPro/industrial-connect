@@ -92,27 +92,12 @@ generate_application_certificate(
 )
 ```
 
-Secure clients prepare the application certificate in the object's constructor by default:
+Client constructors validate settings without opening connections or writing files.
+Provision client files yourself or call the helper above explicitly. It reuses valid
+files; `force=True` replaces the certificate while retaining its private key. The helper
+supports unencrypted private keys. Externally managed encrypted keys can be supplied
+through `private_key_password` in the client configuration.
 
-```python
-client = OpcUaClient(OpcUaConfig(
-    endpoint="opc.tcp://your-server:4840",
-    application_uri="urn:your-company:monitor",
-    certificate="client.der", private_key="client-key.pem",
-    server_certificate="trusted-server.der",
-    # auto_generate_certificate=False,  # use externally managed files instead
-    # force_certificate_regeneration=True,  # replace even a valid certificate
-))
-```
-
-This writes local files during initialization and makes no server connection.
-Unsecured connections (`security_policy="None"`) skip certificate preparation.
-Valid files are reused; missing/expired certificates are generated or renewed. The force
-flag implies generation and replaces the certificate while retaining an existing private
-key. It applies once per object initialization, never on reconnect. The standalone helper
-also accepts `force=True`. Automatic generation supports unencrypted private keys;
-password-protected keys can still be supplied with `auto_generate_certificate=False`.
 The server certificate is always supplied separately and is never generated or overwritten.
-Renewed client certificates may need approval in the server's trust store.
-Protect the generated private key with appropriate filesystem permissions and register
-the application certificate in the server's trust store.
+Client certificate renewal may require approval in the server trust store. Use the same
+application URI for generation and connection and protect the private key files.

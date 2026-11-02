@@ -81,3 +81,11 @@ network, database permissions or delivery requirements.
 
 Licensed under [Apache-2.0](LICENSE). SQLite defaults to `store.db`;
 `SqliteConfig.from_env()` accepts `SQLITE_DATABASE` to choose another file or `:memory:`.
+
+## 0.2 connection API
+
+Structured application settings use `Config.from_mapping()` with environment overrides.
+`sqlite_connection()` exposes managed native SQLite connections for application-owned
+transactions. OPC UA certificate generation is explicit; constructor generation flags
+were removed. Constructors perform no network or filesystem I/O. See the connector
+guides for resource ownership and failure behavior.

@@ -135,10 +135,9 @@ def test_dotenv_precedence_prefixes_and_no_environment_mutation(tmp_path, monkey
             {
                 "ENDPOINT": "opc.tcp://localhost:4840",
                 "SECURITY_POLICY": "None",
-                "AUTO_GENERATE_CERTIFICATE": "false",
             },
-            "auto_generate_certificate",
-            False,
+            "security_policy",
+            "None",
         ),
     ],
 )
@@ -195,3 +194,11 @@ def test_plain_constructor_still_works_and_from_env_does_not_discover_files(tmp_
     monkeypatch.delenv("SQLITE_DATABASE", raising=False)
     assert SqliteConfig.from_env().database == "store.db"
     assert SqliteConfig(database="plain.db").database == "plain.db"
+
+
+def test_structured_connection_settings_share_validation_and_environment_precedence(monkeypatch):
+    monkeypatch.setenv("MQTT_PORT", "1884")
+    config = MqttConfig.from_mapping({"host": "localhost", "port": 1883, "tls": False})
+    assert config.port == 1884 and not config.tls
+    with pytest.raises(TypeError, match="Unknown configuration"):
+        MqttConfig.from_mapping({"host": "localhost", "typo": 1})

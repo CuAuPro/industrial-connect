@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -18,6 +19,16 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 
+def _subscription_log_filter(record: logging.LogRecord) -> bool:
+    if record.levelno == logging.INFO and str(record.msg).startswith(
+        "Publish callback called with result:"
+    ):
+        record.levelno = logging.DEBUG
+        record.levelname = "DEBUG"
+        return logging.getLogger(record.name).isEnabledFor(logging.DEBUG)
+    return True
+
+
 @dataclass(frozen=True, kw_only=True)
 class OpcUaConfig(EnvConfig):
     _env_prefix = "OPCUA_"
@@ -36,8 +47,6 @@ class OpcUaConfig(EnvConfig):
     private_key: str | None = None
     private_key_password: str | None = field(default=None, repr=False)
     server_certificate: str | None = None
-    auto_generate_certificate: bool = True
-    force_certificate_regeneration: bool = False
 
     def __post_init__(self):
         self._validate_numbers()
@@ -55,7 +64,9 @@ class OpcUaConfig(EnvConfig):
             "Aes256Sha256RsaPss",
         }:
             raise ValueError("Unsupported OPC UA security policy")
-        if self.security_mode not in {"Sign", "SignAndEncrypt"}:
+        if self.security_mode not in {"None", "Sign", "SignAndEncrypt"} or (
+            self.security_policy != "None" and self.security_mode == "None"
+        ):
             raise ValueError("Invalid OPC UA security mode")
         if self.security_policy != "None" and not all(
             (self.certificate, self.private_key, self.server_certificate)
@@ -63,24 +74,6 @@ class OpcUaConfig(EnvConfig):
             raise ValueError(
                 "Secure OPC UA requires certificate, private_key and pinned server_certificate"
             )
-        if self.security_policy == "None" and self.force_certificate_regeneration:
-            raise ValueError("Certificate generation requires a secure OPC UA policy")
-        if self.security_policy != "None" and (
-            self.auto_generate_certificate or self.force_certificate_regeneration
-        ):
-            assert self.certificate and self.private_key and self.server_certificate
-            if self.private_key_password:
-                raise ValueError(
-                    "Automatic certificate generation requires an unencrypted private key"
-                )
-            paths = [
-                Path(path).resolve()
-                for path in (self.certificate, self.private_key, self.server_certificate)
-            ]
-            if len(set(paths)) != 3:
-                raise ValueError(
-                    "Client certificate, private key and server certificate need distinct paths"
-                )
 
 
 @dataclass(frozen=True)
@@ -189,22 +182,14 @@ class OpcUaClient(Notifications[OpcUaEvent]):
         self._supervisor = None
         self._subscriptions = {}
         self._remote_subscriptions = {}
-        if config.security_policy != "None" and (
-            config.auto_generate_certificate or config.force_certificate_regeneration
-        ):
-            assert config.private_key and config.certificate
-            generate_application_certificate(
-                config.private_key,
-                config.certificate,
-                application_uri=config.application_uri,
-                force=config.force_certificate_regeneration,
-            )
 
     @property
     def connection_status(self) -> str:
         return "CLOSED" if self._closed else "CONNECTED" if self.connected else "DISCONNECTED"
 
     def _make_client(self):
+        # asyncua otherwise emits complete subscription payloads at INFO.
+        logging.getLogger("asyncua.common.subscription").addFilter(_subscription_log_filter)
         c = self.config
         client = require("asyncua.sync", "opcua").Client(
             c.endpoint,

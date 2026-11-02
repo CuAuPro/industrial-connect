@@ -1,8 +1,9 @@
 import sqlite3
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from threading import RLock
+from typing import Any, Literal
 
 from ..config import EnvConfig
 from ..errors import ConnectionError, _cleanup
@@ -25,6 +26,44 @@ class SqliteConfig(EnvConfig):
             raise ValueError("database and a positive timeout are required")
 
 
+def _open_connection(
+    config: SqliteConfig,
+    *,
+    isolation_level: Literal["DEFERRED", "EXCLUSIVE", "IMMEDIATE"] | None = None,
+    row_factory: Callable[..., Any] | None = None,
+) -> sqlite3.Connection:
+    connection = None
+    try:
+        connection = sqlite3.connect(
+            config.database,
+            timeout=config.timeout,
+            isolation_level=isolation_level,
+            check_same_thread=False,
+        )
+        connection.row_factory = row_factory
+        connection.execute("PRAGMA foreign_keys=ON")
+        return connection
+    except Exception as exc:
+        if connection is not None:
+            _cleanup(connection.close, "SQLite initialization cleanup also failed")
+        raise ConnectionError("Could not open SQLite database") from exc
+
+
+@contextmanager
+def sqlite_connection(
+    config: SqliteConfig,
+    *,
+    isolation_level: Literal["DEFERRED", "EXCLUSIVE", "IMMEDIATE"] | None = None,
+    row_factory: Callable[..., Any] | None = None,
+) -> Generator[sqlite3.Connection, None, None]:
+    """Own a native connection; SQL and transaction boundaries belong to the caller."""
+    connection = _open_connection(config, isolation_level=isolation_level, row_factory=row_factory)
+    try:
+        yield connection
+    finally:
+        _cleanup(connection.close, "Could not close SQLite connection")
+
+
 class SqliteClient(DatabaseClient):
     """One lazily opened connection, serialized across calling threads."""
 
@@ -45,19 +84,8 @@ class SqliteClient(DatabaseClient):
                     "Use the active session; nested SQLite transactions are unsupported"
                 )
             if self._conn is None:
-                try:
-                    self._conn = sqlite3.connect(
-                        self.config.database,
-                        timeout=self.config.timeout,
-                        check_same_thread=False,
-                    )
-                    self._conn.execute("PRAGMA foreign_keys=ON")
-                    logger.info("SQLite connection opened")
-                except Exception as exc:
-                    connection, self._conn = self._conn, None
-                    if connection is not None:
-                        _cleanup(connection.close, "SQLite initialization cleanup also failed")
-                    raise ConnectionError("Could not open SQLite database") from exc
+                self._conn = _open_connection(self.config)
+                logger.info("SQLite connection opened")
             try:
                 self._conn.execute("BEGIN")
             except sqlite3.Error as exc:

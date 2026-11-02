@@ -44,6 +44,21 @@ class QuestDbClient:
         self._sender: questdb.PooledSender | None = None
         self._closed = False
         self._lock = RLock()
+        self.last_error: str | None = None
+        self._available = False
+
+    @property
+    def connection_status(self) -> str:
+        """Last operation status, not a background network health probe."""
+        if self._closed:
+            return "CLOSED"
+        if self.last_error is not None:
+            return "ERROR"
+        return "AVAILABLE" if self._available else "UNINITIALIZED"
+
+    def _success(self) -> None:
+        self.last_error = None
+        self._available = True
 
     def _check_open(self) -> None:
         if self._closed:
@@ -57,7 +72,8 @@ class QuestDbClient:
                 self._db = driver.connect(self.config.conf)
                 logger.info("QuestDB QWP pool initialized")
             except Exception as exc:
-                raise ConnectionError("Could not initialize QuestDB QWP pool") from exc
+                self.last_error = "Could not initialize QuestDB QWP pool"
+                raise ConnectionError(self.last_error) from exc
         assert self._db is not None
         return self._db
 
@@ -84,6 +100,7 @@ class QuestDbClient:
                     at=driver.TimestampNanos(timestamp_ns),
                 )
             except Exception as exc:
+                self.last_error = "QuestDB ingestion failed; delivery may be uncertain"
                 logger.warning("QuestDB QWP ingestion failed; delivery may be uncertain")
                 raise OperationError("QuestDB ingestion failed; delivery may be uncertain") from exc
 
@@ -99,10 +116,13 @@ class QuestDbClient:
                         rejected = True
                     if rejected or self._sender.error_events_dropped():
                         logger.warning("QuestDB server reported ingestion errors")
-                        raise OperationError("QuestDB server reported ingestion errors")
+                        self.last_error = "QuestDB server reported ingestion errors"
+                        raise OperationError(self.last_error)
+                    self._success()
                 except OperationError:
                     raise
                 except Exception as exc:
+                    self.last_error = "QuestDB flush failed; delivery may be uncertain"
                     logger.warning("QuestDB flush failed; delivery may be uncertain")
                     raise OperationError("QuestDB flush failed; delivery may be uncertain") from exc
 
@@ -114,9 +134,12 @@ class QuestDbClient:
             try:
                 with db.query(sql, binds) as result:
                     names = [name for name, _ in result.columns()]
-                    return [dict(zip(names, row, strict=True)) for row in result.iter_rows()]
+                    rows = [dict(zip(names, row, strict=True)) for row in result.iter_rows()]
+                    self._success()
+                    return rows
             except Exception as exc:
-                logger.warning("QuestDB query failed")
+                self.last_error = "QuestDB query failed"
+                logger.warning(self.last_error)
                 raise OperationError("QuestDB query failed") from exc
 
     def execute(self, sql: str, params: Sequence[Any] | None = None) -> int | None:
@@ -126,9 +149,11 @@ class QuestDbClient:
             db = self._handle()
             try:
                 report = db.execute(sql, binds)
+                self._success()
                 return None if report is None else report.rows_affected
             except Exception as exc:
-                logger.warning("QuestDB SQL execution failed; outcome may be uncertain")
+                self.last_error = "QuestDB SQL execution failed; outcome may be uncertain"
+                logger.warning(self.last_error)
                 raise OperationError(
                     "QuestDB SQL execution failed; outcome may be uncertain"
                 ) from exc

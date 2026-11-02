@@ -240,3 +240,21 @@ def test_database_driver_options_and_lazy_constructors(monkeypatch):
 def test_invalid_database_configuration(config):
     with pytest.raises(ValueError):
         config()
+
+
+def test_native_sqlite_context_preserves_explicit_transaction_and_closes(tmp_path):
+    import sqlite3
+
+    from industrial_connect.db import sqlite_connection
+
+    config = SqliteConfig(database=str(tmp_path / "native.db"), timeout=0.5)
+    with sqlite_connection(config, row_factory=sqlite3.Row) as connection:
+        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 500
+        connection.execute("CREATE TABLE sample(value INTEGER)")
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("INSERT INTO sample VALUES(1)")
+        connection.rollback()
+        assert connection.execute("SELECT count(*) FROM sample").fetchone()[0] == 0
+    with pytest.raises(sqlite3.ProgrammingError):
+        connection.execute("SELECT 1")

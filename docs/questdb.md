@@ -71,3 +71,7 @@ exceptions and logs may contain them.
 
 Historian schemas, retention and application retry policy remain application-owned. See the
 [official Python client guide](https://questdb.com/docs/connect/clients/python/).
+
+`connection_status` reports the last operation (`UNINITIALIZED`, `AVAILABLE`, `ERROR`,
+`CLOSED`); it is not a background network health probe. `last_error` is a safe summary.
+A successful SQL operation or acknowledged flush clears the last failure.
