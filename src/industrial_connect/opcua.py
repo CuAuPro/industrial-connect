@@ -43,13 +43,20 @@ class OpcUaConfig(EnvConfig):
     notification_capacity: int = 1000
     security_policy: str = "Basic256Sha256"
     security_mode: str = "SignAndEncrypt"
-    certificate: str | None = None
-    private_key: str | None = None
+    certificate: str | None = "data/opcua/client-certificate.der"
+    private_key: str | None = "data/opcua/client-private-key.pem"
     private_key_password: str | None = field(default=None, repr=False)
     server_certificate: str | None = None
+    auto_generate_certificate: bool = True
+    force_certificate_regeneration: bool = False
 
     def __post_init__(self):
         self._validate_numbers()
+        if any(
+            type(flag) is not bool
+            for flag in (self.auto_generate_certificate, self.force_certificate_regeneration)
+        ):
+            raise ValueError("Certificate generation flags must be booleans")
         endpoint = urlsplit(self.endpoint)
         if endpoint.scheme != "opc.tcp" or not endpoint.hostname or endpoint.username:
             raise ValueError("An opc.tcp endpoint without embedded credentials is required")
@@ -73,6 +80,18 @@ class OpcUaConfig(EnvConfig):
         ):
             raise ValueError(
                 "Secure OPC UA requires certificate, private_key and pinned server_certificate"
+            )
+
+        if self.force_certificate_regeneration and self.security_policy == "None":
+            raise ValueError("Certificate regeneration requires a secure OPC UA policy")
+        if (
+            self.security_policy != "None"
+            and self.private_key_password
+            and (self.auto_generate_certificate or self.force_certificate_regeneration)
+        ):
+            raise ValueError(
+                "Automatic certificate generation requires an unencrypted private key; "
+                "set auto_generate_certificate=False for externally managed encrypted keys"
             )
 
 
@@ -182,12 +201,37 @@ class OpcUaClient(Notifications[OpcUaEvent]):
         self._supervisor = None
         self._subscriptions = {}
         self._remote_subscriptions = {}
+        self._certificate_prepared = False
 
     @property
     def connection_status(self) -> str:
         return "CLOSED" if self._closed else "CONNECTED" if self.connected else "DISCONNECTED"
 
+    def _prepare_certificate(self) -> None:
+        c = self.config
+        if self._certificate_prepared or c.security_policy == "None":
+            return
+        if c.auto_generate_certificate or c.force_certificate_regeneration:
+            assert c.private_key and c.certificate and c.server_certificate
+            paths = [
+                Path(path).resolve()
+                for path in (c.private_key, c.certificate, c.server_certificate)
+            ]
+            if len(set(paths)) != 3:
+                raise ValueError(
+                    "Client certificate, private key and server certificate need distinct paths"
+                )
+            generate_application_certificate(
+                c.private_key,
+                c.certificate,
+                application_uri=c.application_uri,
+                force=c.force_certificate_regeneration,
+            )
+        # A forced renewal applies once per client, even if the first connection fails.
+        self._certificate_prepared = True
+
     def _make_client(self):
+        self._prepare_certificate()
         # asyncua otherwise emits complete subscription payloads at INFO.
         logging.getLogger("asyncua.common.subscription").addFilter(_subscription_log_filter)
         c = self.config

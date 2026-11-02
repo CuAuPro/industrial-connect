@@ -82,7 +82,8 @@ Applications own signal conversion, freshness rules and identity handling. The c
 preserves native values, status codes and timestamps; it does not infer process meaning.
 Historian schemas and delivery/retry policy likewise belong to the consuming application.
 
-Certificate generation is explicit and does not contact a server:
+Client certificates are prepared automatically before the first secure connection.
+You can also prepare them manually without contacting a server:
 
 ```python
 from industrial_connect.opcua import generate_application_certificate
@@ -93,11 +94,29 @@ generate_application_certificate(
 ```
 
 Client constructors validate settings without opening connections or writing files.
-Provision client files yourself or call the helper above explicitly. It reuses valid
-files; `force=True` replaces the certificate while retaining its private key. The helper
-supports unencrypted private keys. Externally managed encrypted keys can be supplied
-through `private_key_password` in the client configuration.
+On the first secure connection attempt (`start()`, `connect()`, or a read/write),
+`auto_generate_certificate=True` prepares missing/expired client files and reuses
+valid ones. Defaults are portable paths relative to the working directory:
 
-The server certificate is always supplied separately and is never generated or overwritten.
+- `certificate="data/opcua/client-certificate.der"`
+- `private_key="data/opcua/client-private-key.pem"`
+
+Parent directories are created as needed. Persist this directory across service/container
+restarts to retain the client identity trusted by the server. Explicit relative or absolute
+paths override these defaults.
+
+`force_certificate_regeneration=False` is the default. Set it to `True` to replace
+the client certificate once per client instance, retaining an existing private key.
+Reconnects reuse the prepared files, including after a failed first handshake. Force
+also works when `auto_generate_certificate=False`. An unsecured connection generates
+nothing; forcing regeneration in unsecured mode is rejected.
+
+For externally provisioned files set `auto_generate_certificate=False`. Encrypted
+private keys additionally require this setting and `force_certificate_regeneration=False`.
+Automatic generation only supports unencrypted private keys. The standalone helper remains
+available and accepts `force=True` for an explicit renewal.
+
+The trusted server certificate must still be configured explicitly. It is never generated
+or overwritten. Automatic preparation rejects overlapping client/key/server file paths.
 Client certificate renewal may require approval in the server trust store. Use the same
 application URI for generation and connection and protect the private key files.

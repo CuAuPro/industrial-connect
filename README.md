@@ -86,6 +86,6 @@ Licensed under [Apache-2.0](LICENSE). SQLite defaults to `store.db`;
 
 Structured application settings use `Config.from_mapping()` with environment overrides.
 `sqlite_connection()` exposes managed native SQLite connections for application-owned
-transactions. OPC UA certificate generation is explicit; constructor generation flags
-were removed. Constructors perform no network or filesystem I/O. See the connector
-guides for resource ownership and failure behavior.
+transactions. OPC UA automatically prepares client certificates at first connection,
+with portable relative paths and optional forced renewal. Constructors perform no
+network or filesystem I/O. See the connector guides for resource ownership and failure behavior.

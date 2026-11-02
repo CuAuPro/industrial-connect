@@ -60,8 +60,6 @@ def test_opcua_secure_pinned_certificate_handshake(service, tmp_path, policy):
     from asyncua.sync import Server
     from cryptography.x509.oid import ExtendedKeyUsageOID
 
-    from industrial_connect.opcua import generate_application_certificate
-
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -88,7 +86,7 @@ def test_opcua_secure_pinned_certificate_handshake(service, tmp_path, policy):
     node = server.nodes.objects.add_variable(index, "SecureReading", 4.5)
     client_key, client_cert = tmp_path / "client-key.pem", tmp_path / "client-cert.der"
     client_uri = "urn:industrial-connect:test:client"
-    generate_application_certificate(client_key, client_cert, application_uri=client_uri)
+    assert not client_key.exists() and not client_cert.exists()
     server.start()
     try:
         with OpcUaClient(
@@ -101,6 +99,7 @@ def test_opcua_secure_pinned_certificate_handshake(service, tmp_path, policy):
                 server_certificate=str(server_cert),
             )
         ) as client:
+            assert client_key.exists() and client_cert.exists()
             assert client.read_many([node.nodeid.to_string()])[0].value == 4.5
     finally:
         server.stop()
