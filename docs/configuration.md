@@ -41,7 +41,7 @@ Keys are the prefix plus the **uppercase config field name**:
 | `SqliteConfig` | `SQLITE_` | `SQLITE_DATABASE` |
 | `QuestDbConfig` | `QUESTDB_` | `QUESTDB_CONF` |
 | `MqttConfig` | `MQTT_` | `MQTT_HOST`, `MQTT_CLIENT_ID`, `MQTT_USERNAME` |
-| `OpcUaConfig` | `OPCUA_` | `OPCUA_ENDPOINT`, `OPCUA_USERNAME`, `OPCUA_CERTIFICATE` |
+| `OpcUaConfig` | `OPCUA_` | `OPCUA_ENDPOINT`, `OPCUA_NAME`, `OPCUA_USERNAME`, `OPCUA_CERTIFICATE` |
 
 QuestDB ingestion and SQL share `QuestDbConfig.from_env(env_file=".env")`;
 set `QUESTDB_CONF` to a `wss::` connection string (`ws::` for explicit local plaintext).

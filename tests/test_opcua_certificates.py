@@ -54,16 +54,19 @@ def test_forced_generation_failure_preserves_existing_certificate_and_stops_thre
     assert set(tmp_path.iterdir()) == {key, cert}
 
 
-def test_automatic_relative_paths_reuse_and_force_once_per_client(tmp_path, monkeypatch):
+@pytest.mark.parametrize("name", ["default", "datacol1"])
+def test_automatic_relative_paths_reuse_and_force_once_per_client(tmp_path, monkeypatch, name):
     from dataclasses import replace
     from pathlib import Path
 
     monkeypatch.chdir(tmp_path)
     config = OpcUaConfig(
-        endpoint="opc.tcp://localhost:4840", server_certificate="trusted-server.der"
+        endpoint="opc.tcp://localhost:4840", name=name, server_certificate="trusted-server.der"
     )
     client = OpcUaClient(config)
     assert list(tmp_path.iterdir()) == []
+    assert config.certificate == f"data/opcua/{name}/client-certificate.der"
+    assert config.private_key == f"data/opcua/{name}/client-private-key.pem"
     client._prepare_certificate()
     key, cert = Path(config.private_key), Path(config.certificate)
     original = key.read_bytes(), cert.read_bytes()
@@ -80,6 +83,51 @@ def test_automatic_relative_paths_reuse_and_force_once_per_client(tmp_path, monk
     assert cert.read_bytes() == renewed
     forced.close()
     assert not (tmp_path / "trusted-server.der").exists()
+
+
+def test_default_name_explicit_paths_and_partial_overrides():
+    defaults = OpcUaConfig(endpoint="opc.tcp://localhost:4840", server_certificate="server.der")
+    assert defaults.name == "default"
+    assert defaults.certificate == "data/opcua/default/client-certificate.der"
+    legacy = OpcUaConfig(
+        endpoint=defaults.endpoint,
+        name="datacol1",
+        server_certificate="server.der",
+        certificate="data/opcua/client-certificate.der",
+        private_key="data/opcua/client-private-key.pem",
+    )
+    assert legacy.certificate == "data/opcua/client-certificate.der"
+    assert legacy.private_key == "data/opcua/client-private-key.pem"
+    partial = OpcUaConfig(
+        endpoint=defaults.endpoint,
+        name="datacol1",
+        server_certificate="server.der",
+        certificate="custom/client.der",
+    )
+    assert partial.certificate == "custom/client.der"
+    assert partial.private_key == "data/opcua/datacol1/client-private-key.pem"
+
+
+def test_connection_name_from_environment_and_mapping(monkeypatch):
+    monkeypatch.setenv("NAMED_OPCUA_NAME", "datacol1")
+    config = OpcUaConfig.from_env(
+        prefix="NAMED_OPCUA_",
+        endpoint="opc.tcp://localhost:4840",
+        server_certificate="server.der",
+    )
+    assert config.name == "datacol1"
+    assert config.certificate == "data/opcua/datacol1/client-certificate.der"
+    mapped = OpcUaConfig.from_mapping(
+        {"endpoint": config.endpoint, "name": "datacol2", "server_certificate": "server.der"},
+        prefix="UNUSED_TEST_OPCUA_",
+    )
+    assert mapped.private_key == "data/opcua/datacol2/client-private-key.pem"
+
+
+@pytest.mark.parametrize("name", [None, "", "../outside", "a\\b"])
+def test_connection_name_rejects_invalid_path_components(name):
+    with pytest.raises(ValueError, match="OPC UA name"):
+        OpcUaConfig(endpoint="opc.tcp://localhost:4840", name=name, security_policy="None")
 
 
 def test_managed_and_unsecured_clients_skip_generation_and_protect_server_pin(

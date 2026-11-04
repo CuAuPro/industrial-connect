@@ -98,8 +98,23 @@ On the first secure connection attempt (`start()`, `connect()`, or a read/write)
 `auto_generate_certificate=True` prepares missing/expired client files and reuses
 valid ones. Defaults are portable paths relative to the working directory:
 
-- `certificate="data/opcua/client-certificate.der"`
-- `private_key="data/opcua/client-private-key.pem"`
+- `name="default"`
+- `certificate=None` resolves to `data/opcua/default/client-certificate.der`
+- `private_key=None` resolves to `data/opcua/default/client-private-key.pem`
+
+Set `name="datacol1"` to place the default client certificate and key under
+`data/opcua/datacol1/`. Names accept letters, digits, underscores and hyphens.
+`OPCUA_NAME` is supported by `from_env()` and `from_mapping()` with their usual
+prefix/override rules. Explicit certificate and key paths each take precedence;
+only omitted/`None` paths are derived from the name. Name selects storage paths;
+application URI/name and the pinned server certificate remain separately configured.
+
+**Migration:** the unnamed default directory has changed from `data/opcua/` to
+`data/opcua/default/`. To keep an existing trusted identity, explicitly set
+`certificate="data/opcua/client-certificate.der"` and
+`private_key="data/opcua/client-private-key.pem"`. Otherwise the first secure
+connection generates a new identity in the new directory, requiring server trust.
+There is no automatic move or regeneration of existing files.
 
 Parent directories are created as needed. Persist this directory across service/container
 restarts to retain the client identity trusted by the server. Explicit relative or absolute

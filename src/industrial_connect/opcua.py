@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import isfinite
 from pathlib import Path
+from re import fullmatch
 from tempfile import TemporaryDirectory
 from threading import Event, RLock, Thread
 from typing import Any
@@ -34,6 +35,7 @@ class OpcUaConfig(EnvConfig):
     _env_prefix = "OPCUA_"
 
     endpoint: str
+    name: str = "default"
     application_uri: str = "urn:industrial-connect:client"
     application_name: str = "industrial-connect"
     username: str | None = None
@@ -43,8 +45,8 @@ class OpcUaConfig(EnvConfig):
     notification_capacity: int = 1000
     security_policy: str = "Basic256Sha256"
     security_mode: str = "SignAndEncrypt"
-    certificate: str | None = "data/opcua/client-certificate.der"
-    private_key: str | None = "data/opcua/client-private-key.pem"
+    certificate: str | None = None
+    private_key: str | None = None
     private_key_password: str | None = field(default=None, repr=False)
     server_certificate: str | None = None
     auto_generate_certificate: bool = True
@@ -52,6 +54,16 @@ class OpcUaConfig(EnvConfig):
 
     def __post_init__(self):
         self._validate_numbers()
+        if not isinstance(self.name, str) or not fullmatch(r"[A-Za-z0-9_-]+", self.name):
+            raise ValueError("OPC UA name must use letters, digits, underscores or hyphens")
+        if self.certificate is None:
+            object.__setattr__(
+                self, "certificate", f"data/opcua/{self.name}/client-certificate.der"
+            )
+        if self.private_key is None:
+            object.__setattr__(
+                self, "private_key", f"data/opcua/{self.name}/client-private-key.pem"
+            )
         if any(
             type(flag) is not bool
             for flag in (self.auto_generate_certificate, self.force_certificate_regeneration)
