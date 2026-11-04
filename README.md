@@ -18,7 +18,7 @@ application's dependencies. `db` includes every database; `all` includes every e
 ## Connectors and runnable examples
 
 Each guide includes configuration, a realistic example, resource lifetime and error behavior.
-Run examples from the checkout; `--help` lists the available options.
+Example scripts are in `examples/`; `--help` lists their options.
 
 | Connector | Extra | Guide | Example |
 | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ network, database permissions or delivery requirements.
 Licensed under [Apache-2.0](LICENSE). SQLite defaults to `store.db`;
 `SqliteConfig.from_env()` accepts `SQLITE_DATABASE` to choose another file or `:memory:`.
 
-## 0.2 connection API
+## Application configuration
 
 Structured application settings use `Config.from_mapping()` with environment overrides.
 `sqlite_connection()` exposes managed native SQLite connections for application-owned

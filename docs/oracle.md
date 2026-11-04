@@ -1,7 +1,7 @@
 # Oracle
 
-Install `industrial-connect[oracle]` (SQLite needs only the core package).
-Run from the checkout after configuring [OracleConfig](configuration.md):
+Install `industrial-connect[oracle]`.
+Configure [OracleConfig](configuration.md) and run the example:
 
 ```shell
 python -m examples.oracle --env-file .env --initialize --record

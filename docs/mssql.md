@@ -1,7 +1,7 @@
 # MSSQL
 
-Install `industrial-connect[mssql]` (SQLite needs only the core package).
-Run from the checkout after configuring [SqlServerConfig](configuration.md):
+Install `industrial-connect[mssql]`.
+Configure [SqlServerConfig](configuration.md) and run the example:
 
 ```shell
 python -m examples.mssql --env-file .env --initialize --record

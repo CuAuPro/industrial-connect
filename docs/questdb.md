@@ -1,6 +1,6 @@
 # QuestDB
 
-Run [the equipment historian example](../examples/questdb.py) from the checkout:
+Run [the equipment historian example](../examples/questdb.py):
 
 ```shell
 python -m examples.questdb --env-file .env --initialize --record

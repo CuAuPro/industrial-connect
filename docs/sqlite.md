@@ -1,7 +1,7 @@
 # SQLite
 
-Install `industrial-connect[sqlite]` (SQLite needs only the core package).
-Run from the checkout after configuring [SqliteConfig](configuration.md):
+Install `industrial-connect`.
+Configure [SqliteConfig](configuration.md) and run the example:
 
 ```shell
 python -m examples.sqlite --env-file .env --initialize --record

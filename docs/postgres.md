@@ -1,7 +1,7 @@
 # Postgres
 
-Install `industrial-connect[postgres]` (SQLite needs only the core package).
-Run from the checkout after configuring [PostgresConfig](configuration.md):
+Install `industrial-connect[postgres]`.
+Configure [PostgresConfig](configuration.md) and run the example:
 
 ```shell
 python -m examples.postgres --env-file .env --initialize --record
