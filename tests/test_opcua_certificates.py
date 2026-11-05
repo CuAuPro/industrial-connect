@@ -211,3 +211,36 @@ def test_named_connections_share_identity_during_concurrent_preparation(tmp_path
     finally:
         for client in clients:
             client.close()
+
+
+def test_secure_discovery_prepares_client_identity_and_warns_once(tmp_path, monkeypatch, caplog):
+    from unittest.mock import Mock
+
+    import industrial_connect.opcua as module
+
+    pytest.importorskip("asyncua")
+    monkeypatch.chdir(tmp_path)
+    config = OpcUaConfig(endpoint="opc.tcp://localhost:4840", name="datacol1")
+    client = OpcUaClient(config)
+    raw = Mock()
+    native_require = module.require
+    # Native generation still runs when no server certificate is configured.
+    client._prepare_certificate()
+    monkeypatch.setattr(
+        module,
+        "require",
+        lambda name, extra: (
+            SimpleNamespace(Client=lambda *args, **kwargs: raw)
+            if name == "asyncua.sync"
+            else native_require(name, extra)
+        ),
+    )
+    try:
+        for _ in range(2):
+            assert client._make_client() is raw
+        assert raw.set_security.call_args.kwargs["server_certificate"] is None
+        assert raw.set_security.call_args.kwargs["mode"].name == "SignAndEncrypt"
+        assert "certificate_validator" not in vars(raw.aio_obj)
+        assert caplog.text.count("uses server certificate discovery") == 1
+    finally:
+        client.close()

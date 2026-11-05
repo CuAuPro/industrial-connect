@@ -76,10 +76,13 @@ failures appear individually as `subscription_failed` events.
 
 The default policy is `Basic256Sha256` with `SignAndEncrypt`. Other supported secure
 policies are `Aes128Sha256RsaOaep` and `Aes256Sha256RsaPss`. All secure policies require
-application certificates and an explicitly pinned server certificate. Validation checks
+application certificates. An optional `server_certificate` enables pinning. With a pin, validation checks
 the server certificate fingerprint, validity period, application URI and server extended
 key usage. Pin renewal is an application deployment action; there is no automatic trust
-on first use. For an explicitly unsecured local test use `security_policy="None"`.
+on first use. Without a pin, asyncua discovers the server certificate and still uses
+the configured signing/encryption policy, but does not independently establish trust
+in the server identity. A warning is logged once per client instance, and no server
+certificate file is saved. For an explicitly unsecured local test use `security_policy="None"`.
 
 Applications own signal conversion, freshness rules and identity handling. The connector
 preserves native values, status codes and timestamps; it does not infer process meaning.
@@ -107,7 +110,7 @@ valid ones. Defaults are portable paths relative to the working directory:
 Connection `name` does not affect certificate paths. The field and `OPCUA_NAME`
 remain supported for compatibility. Explicit paths override the defaults.
 Connections representing the same application instance can share this client pair
-and must use the same application URI. Configure a separate pinned server
+and must use the same application URI. When using pinning, configure a separate server
 certificate for each server, for example `data/opcua/datacol1-server.der` and
 `data/opcua/datacol2-server.der`. Certificate preparation is serialized within one
 process; separate processes should use externally provisioned identities.
@@ -132,7 +135,7 @@ private keys additionally require this setting and `force_certificate_regenerati
 Automatic generation only supports unencrypted private keys. The standalone helper remains
 available and accepts `force=True` for an explicit renewal.
 
-The trusted server certificate must still be configured explicitly. It is never generated
+A trusted server certificate can be configured explicitly to enable pinning. It is never generated
 or overwritten. Automatic preparation rejects overlapping client/key/server file paths.
 Client certificate renewal may require approval in the server trust store. Use the same
 application URI for generation and connection and protect the private key files.

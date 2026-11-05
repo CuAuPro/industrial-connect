@@ -84,12 +84,8 @@ class OpcUaConfig(EnvConfig):
             self.security_policy != "None" and self.security_mode == "None"
         ):
             raise ValueError("Invalid OPC UA security mode")
-        if self.security_policy != "None" and not all(
-            (self.certificate, self.private_key, self.server_certificate)
-        ):
-            raise ValueError(
-                "Secure OPC UA requires certificate, private_key and pinned server_certificate"
-            )
+        if self.security_policy != "None" and not all((self.certificate, self.private_key)):
+            raise ValueError("Secure OPC UA requires certificate and private_key")
 
         if self.force_certificate_regeneration and self.security_policy == "None":
             raise ValueError("Certificate regeneration requires a secure OPC UA policy")
@@ -215,6 +211,7 @@ class OpcUaClient(Notifications[OpcUaEvent]):
         self._subscriptions = {}
         self._remote_subscriptions = {}
         self._certificate_prepared = False
+        self._discovery_warned = False
 
     @property
     def connection_status(self) -> str:
@@ -225,12 +222,13 @@ class OpcUaClient(Notifications[OpcUaEvent]):
         if self._certificate_prepared or c.security_policy == "None":
             return
         if c.auto_generate_certificate or c.force_certificate_regeneration:
-            assert c.private_key and c.certificate and c.server_certificate
+            assert c.private_key and c.certificate
             paths = [
                 Path(path).resolve()
                 for path in (c.private_key, c.certificate, c.server_certificate)
+                if path is not None
             ]
-            if len(set(paths)) != 3:
+            if len(set(paths)) != len(paths):
                 raise ValueError(
                     "Client certificate, private key and server certificate need distinct paths"
                 )
@@ -264,6 +262,13 @@ class OpcUaClient(Notifications[OpcUaEvent]):
             if c.security_policy != "None":
                 ua = require("asyncua.ua", "opcua")
                 policies = require("asyncua.crypto.security_policies", "opcua")
+                if c.server_certificate is None and not self._discovery_warned:
+                    logger.warning(
+                        "OPC UA connection %s uses server certificate discovery; "
+                        "the server identity is not verified against a trusted certificate",
+                        c.name,
+                    )
+                    self._discovery_warned = True
                 client.set_security(
                     getattr(policies, "SecurityPolicy" + c.security_policy),
                     certificate=c.certificate,
@@ -272,7 +277,8 @@ class OpcUaClient(Notifications[OpcUaEvent]):
                     server_certificate=c.server_certificate,
                     mode=getattr(ua.MessageSecurityMode, c.security_mode),
                 )
-                self._set_validator(client)
+                if c.server_certificate is not None:
+                    self._set_validator(client)
             return client
         except BaseException:
             _cleanup(client.tloop.stop, "OPC UA client worker cleanup also failed")

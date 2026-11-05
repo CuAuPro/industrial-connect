@@ -54,7 +54,8 @@ def test_opcua_real_read_write_subscription_and_cleanup(service):
 
 @pytest.mark.parametrize("service", ["opcua"], indirect=True)
 @pytest.mark.parametrize("policy", ["Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"])
-def test_opcua_secure_pinned_certificate_handshake(service, tmp_path, policy):
+@pytest.mark.parametrize("pinned", [True, False])
+def test_opcua_secure_certificate_handshake(service, tmp_path, policy, pinned):
     from asyncua import ua
     from asyncua.crypto import cert_gen
     from asyncua.sync import Server
@@ -96,7 +97,7 @@ def test_opcua_secure_pinned_certificate_handshake(service, tmp_path, policy):
                 application_uri=client_uri,
                 certificate=str(client_cert),
                 private_key=str(client_key),
-                server_certificate=str(server_cert),
+                server_certificate=str(server_cert) if pinned else None,
             )
         ) as client:
             assert client_key.exists() and client_cert.exists()

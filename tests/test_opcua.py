@@ -286,11 +286,9 @@ def test_certificate_generation_is_explicit_and_identity_matches(tmp_path):
 
 
 @pytest.mark.parametrize("policy", ["Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"])
-def test_secure_client_requires_pinned_cert_and_validates_identity(tmp_path, policy):
+def test_secure_client_with_pin_validates_identity(tmp_path, policy):
     from industrial_connect.opcua import generate_application_certificate
 
-    with pytest.raises(ValueError, match="pinned"):
-        OpcUaConfig(endpoint="opc.tcp://localhost:4840", security_policy=policy)
     key, cert = tmp_path / "key.pem", tmp_path / "cert.der"
     generate_application_certificate(
         key, cert, application_uri="urn:test:secure", host_name="localhost"
