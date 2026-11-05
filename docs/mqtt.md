@@ -1,6 +1,9 @@
 # MQTT
 
-Install `industrial-connect[mqtt,env]`. Set `MQTT_HOST` and, as needed,
+For the file-based examples, install the standalone `industrial-connect[env]` extra.
+See [configuration](configuration.md) for loading settings once and constructing configs explicitly.
+
+Install `industrial-connect[mqtt]`. Set `MQTT_HOST` and, as needed,
 `MQTT_USERNAME`, `MQTT_PASSWORD` and `MQTT_CA_FILE` in `.env`.
 All `MqttConfig` fields use the `MQTT_` environment prefix.
 

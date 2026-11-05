@@ -7,8 +7,9 @@ Optional drivers, explicit resource ownership, no import-time connections.
 
 ```shell
 pip install industrial-connect                    # SQLite and core
-pip install "industrial-connect[postgres,env]"
+pip install "industrial-connect[postgres]"
 pip install "industrial-connect[mqtt,opcua]"
+pip install "industrial-connect[env]"             # Optional .env file loader
 pip install "industrial-connect[all]"
 ```
 
@@ -44,8 +45,9 @@ with SqliteClient(SqliteConfig(database=":memory:")) as db:
     print(db.query("SELECT * FROM readings WHERE equipment=?", ("MILL_1",)))
 ```
 
-Every config supports explicit constructors and `from_env()`; loading a `.env` file
-requires the `env` extra and an explicit `env_file` argument. See
+Load settings once with `industrial_connect.config.load_env()`, then pass values
+explicitly to each connector config. The standalone `env` extra enables `.env` file
+reading for any application; process variables need no extra. See
 [configuration](docs/configuration.md) and the [sample environment](examples/.env.example).
 For persistent clients shared across modules, see [the sharing guide](examples/README.md).
 
@@ -84,7 +86,8 @@ Licensed under [Apache-2.0](LICENSE). SQLite defaults to `store.db`;
 
 ## Application configuration
 
-Structured application settings use `Config.from_mapping()` with environment overrides.
+Applications can load settings once and construct connector configs explicitly.
+`Config.from_mapping()` is also available when automatic environment overrides are wanted.
 `sqlite_connection()` exposes managed native SQLite connections for application-owned
 transactions. OPC UA automatically prepares client certificates at first connection,
 with portable relative paths and optional forced renewal. Constructors perform no

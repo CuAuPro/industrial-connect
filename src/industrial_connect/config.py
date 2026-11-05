@@ -9,6 +9,18 @@ from typing import Any, ClassVar, Self, get_args, get_type_hints
 from ._optional import require
 
 
+def load_env(env_file: str | Path | None = None) -> dict[str, str | None]:
+    """Read explicit file values and process overrides without changing the environment."""
+    source: dict[str, str | None] = {}
+    if env_file is not None:
+        path = Path(env_file)
+        if not path.is_file():
+            raise FileNotFoundError(f"Environment file does not exist: {path}")
+        source.update(require("dotenv", "env").dotenv_values(path, encoding="utf-8"))
+    source.update(os.environ)
+    return source
+
+
 class EnvConfig:
     _env_prefix: ClassVar[str]
 
@@ -51,13 +63,7 @@ class EnvConfig:
         Keys are the prefix plus each uppercase field name. No process environment
         changes or implicit .env discovery occur. Config construction performs validation.
         """
-        source: dict[str, str | None] = {}
-        if env_file is not None:
-            path = Path(env_file)
-            if not path.is_file():
-                raise FileNotFoundError(f"Environment file does not exist: {path}")
-            source.update(require("dotenv", "env").dotenv_values(path, encoding="utf-8"))
-        source.update(os.environ)
+        source = load_env(env_file)
         config_fields = fields(cls)  # type: ignore[arg-type]
         names = {field.name for field in config_fields}
         if unknown := overrides.keys() - names:

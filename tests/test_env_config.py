@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from industrial_connect.config import load_env
 from industrial_connect.db import (
     OracleClient,
     OracleConfig,
@@ -202,3 +203,43 @@ def test_structured_connection_settings_share_validation_and_environment_precede
     assert config.port == 1884 and not config.tls
     with pytest.raises(TypeError, match="Unknown configuration"):
         MqttConfig.from_mapping({"host": "localhost", "typo": 1})
+
+
+def test_load_env_once_then_configure_connectors_explicitly(tmp_path, monkeypatch):
+    pytest.importorskip("dotenv")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "APP_HOST=file-host\nAPP_DATABASE=reporting\nAPP_USER=app\n"
+        "APP_PASSWORD=secret\nAPP_PORT=15432\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("APP_HOST", "process-host")
+    monkeypatch.setenv("PGHOST", "unused-connector-override")
+    before = dict(os.environ)
+    settings = load_env(env_file)
+    assert dict(os.environ) == before
+    monkeypatch.setenv("APP_HOST", "changed-after-load")
+    config = PostgresConfig(
+        host=settings["APP_HOST"],
+        database=settings["APP_DATABASE"],
+        user=settings["APP_USER"],
+        password=settings["APP_PASSWORD"],
+        port=int(settings["APP_PORT"]),
+    )
+    mqtt = MqttConfig(host=settings["APP_HOST"])
+    assert config.host == mqtt.host == "process-host"
+    assert config.port == 15432
+    assert {**before, "APP_HOST": "changed-after-load"} == dict(os.environ)
+
+
+def test_load_env_process_only_needs_no_extra_and_returns_snapshot(monkeypatch):
+    import industrial_connect.config as module
+
+    def missing(*args):
+        raise DependencyError("optional loader unavailable")
+
+    monkeypatch.setattr(module, "require", missing)
+    monkeypatch.setenv("APP_DATABASE", "reporting")
+    settings = load_env()
+    settings["APP_DATABASE"] = "local-change"
+    assert os.environ["APP_DATABASE"] == "reporting"

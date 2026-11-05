@@ -1,6 +1,9 @@
 # OPC UA
 
-Install `industrial-connect[opcua,env]`. Configure `OPCUA_ENDPOINT`,
+For the file-based examples, install the standalone `industrial-connect[env]` extra.
+See [configuration](configuration.md) for loading settings once and constructing configs explicitly.
+
+Install `industrial-connect[opcua]`. Configure `OPCUA_ENDPOINT`,
 `OPCUA_APPLICATION_URI`, `OPCUA_CERTIFICATE`, `OPCUA_PRIVATE_KEY` and
 `OPCUA_SERVER_CERTIFICATE`; use `OPCUA_USERNAME`/`OPCUA_PASSWORD` if required.
 Obtain the server certificate through your trusted provisioning process and register

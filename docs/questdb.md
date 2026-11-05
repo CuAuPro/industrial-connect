@@ -1,5 +1,8 @@
 # QuestDB
 
+For the file-based examples, install the standalone `industrial-connect[env]` extra.
+See [configuration](configuration.md) for loading settings once and constructing configs explicitly.
+
 Run [the equipment historian example](../examples/questdb.py):
 
 ```shell
@@ -8,7 +11,7 @@ python -m examples.questdb --env-file .env --record --equipment MILL_1 --tempera
 python -m examples.questdb --env-file .env
 ```
 
-Install `industrial-connect[questdb,env]`. Set `QUESTDB_CONF` to your QWP connection
+Install `industrial-connect[questdb]`. Set `QUESTDB_CONF` to your QWP connection
 string, for example `wss::addr=historian.example:9000;username=collector;password=...;auto_flush=off;`.
 Use a test schema/account. Setup and inserts are opt-in. The example creates a WAL
 table with deduplication keys `(timestamp, sample_id)` and UUID IDs; it never drops

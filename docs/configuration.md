@@ -1,8 +1,8 @@
 # Application configuration and environment overrides
 
 For applications with YAML/JSON, keep stable non-secret settings there: hosts, ports,
-TLS/security, certificate paths, generation flags and timeouts. Use `from_mapping()` to
-combine those settings with optional credential or deployment environment overrides.
+TLS/security, certificate paths, generation flags and timeouts. Load settings and
+credentials once, then pass the selected values explicitly to each connector config.
 A `.env` file is not required. Usernames may accompany passwords in the credential file;
 QuestDB credentials are part of its native `QUESTDB_CONF` string.
 
@@ -10,7 +10,46 @@ The standalone examples intentionally use environment-only configuration and hav
 YAML file. Their sample `.env` therefore includes required connection addresses, but
 omits redundant defaults. This is not a second configuration catalog for IPE applications.
 
-Every connector config supports `from_env()`. Direct constructors also work:
+## Load once, configure explicitly
+
+Install the optional file loader independently of connector drivers:
+
+```shell
+pip install "industrial-connect[env]"
+```
+
+`load_env()` returns a mapping. It reads only an explicitly supplied file, applies
+process variables above file values, and never changes `os.environ`. Without a
+file argument it reads process variables and needs no optional dependency.
+Load once at application startup, then choose each connector's settings explicitly:
+
+```python
+from industrial_connect.config import load_env
+from industrial_connect.db import PostgresConfig
+from industrial_connect.mqtt import MqttConfig
+
+settings = load_env(".env")  # Use load_env() for deployment-provided variables.
+postgres = PostgresConfig(
+    host=settings["PGHOST"],
+    database=settings["PGDATABASE"],
+    user=settings["PGUSER"],
+    password=settings["PGPASSWORD"],
+)
+mqtt = MqttConfig(
+    host=settings["MQTT_HOST"],
+    username=settings.get("MQTT_USERNAME"),
+    password=settings.get("MQTT_PASSWORD"),
+)
+```
+
+The loader returns raw strings (or `None` for file keys without a value).
+Validate required values and convert numeric/boolean values before passing them
+to constructors. Settings can also come from application-owned YAML/JSON; direct
+constructors do not read environment variables or apply hidden overrides.
+
+## Per-connector convenience API
+
+Every connector config also supports `from_env()` for scripts:
 
 ```python
 from industrial_connect.db import OracleClient, OracleConfig, init_database

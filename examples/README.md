@@ -75,7 +75,7 @@ For a live MQTT broker, run:
 python -m examples.shared_client.mqtt_main
 ```
 
-Install `industrial-connect[mqtt,env]` first. Configure `MQTT_HOST`,
+Install `industrial-connect[mqtt]` first. Configure `MQTT_HOST`,
 optional `MQTT_CLIENT_ID`/`MQTT_USERNAME`/`MQTT_PASSWORD`, and your TLS CA.
 SQLite defaults to `store.db`; set `SQLITE_DATABASE` to use another file. For a bounded run:
 
@@ -91,7 +91,9 @@ transaction with SQLite; this example is not a durable exactly-once pipeline.
 
 ## Configuration
 
-Use `Config.from_env(env_file=".env")` with an explicit path, or omit `env_file` for
-process variables only. Existing constructors continue to work. Precedence is
-explicit arguments, process environment, file values, then defaults. See
+Use `load_env()` once at startup and pass the returned values explicitly into
+connector configs; see `examples.env_config`. Install `industrial-connect[env]`
+separately when reading a `.env` file. Connector examples also demonstrate the
+`Config.from_env()` convenience API. Precedence there is explicit arguments,
+process environment, file values, then defaults. See
 [configuration](../docs/configuration.md).

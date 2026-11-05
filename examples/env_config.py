@@ -2,6 +2,7 @@
 
 import argparse
 
+from industrial_connect.config import load_env
 from industrial_connect.db import SqliteClient, SqliteConfig, close_database, init_database
 
 
@@ -11,7 +12,9 @@ def main() -> None:
         "--env-file", help="Explicit .env path; otherwise use process variables only"
     )
     args = parser.parse_args()
-    database = init_database("local", SqliteClient(SqliteConfig.from_env(env_file=args.env_file)))
+    settings = load_env(args.env_file)
+    config = SqliteConfig(database=settings.get("SQLITE_DATABASE") or "store.db")
+    database = init_database("local", SqliteClient(config))
     try:
         print(database.query("SELECT 1 AS value"))
     finally:
