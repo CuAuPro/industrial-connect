@@ -65,8 +65,8 @@ def test_automatic_relative_paths_reuse_and_force_once_per_client(tmp_path, monk
     )
     client = OpcUaClient(config)
     assert list(tmp_path.iterdir()) == []
-    assert config.certificate == f"data/opcua/{name}/client-certificate.der"
-    assert config.private_key == f"data/opcua/{name}/client-private-key.pem"
+    assert config.certificate == "data/opcua/client-certificate.der"
+    assert config.private_key == "data/opcua/client-private-key.pem"
     client._prepare_certificate()
     key, cert = Path(config.private_key), Path(config.certificate)
     original = key.read_bytes(), cert.read_bytes()
@@ -88,7 +88,7 @@ def test_automatic_relative_paths_reuse_and_force_once_per_client(tmp_path, monk
 def test_default_name_explicit_paths_and_partial_overrides():
     defaults = OpcUaConfig(endpoint="opc.tcp://localhost:4840", server_certificate="server.der")
     assert defaults.name == "default"
-    assert defaults.certificate == "data/opcua/default/client-certificate.der"
+    assert defaults.certificate == "data/opcua/client-certificate.der"
     legacy = OpcUaConfig(
         endpoint=defaults.endpoint,
         name="datacol1",
@@ -105,7 +105,7 @@ def test_default_name_explicit_paths_and_partial_overrides():
         certificate="custom/client.der",
     )
     assert partial.certificate == "custom/client.der"
-    assert partial.private_key == "data/opcua/datacol1/client-private-key.pem"
+    assert partial.private_key == "data/opcua/client-private-key.pem"
 
 
 def test_connection_name_from_environment_and_mapping(monkeypatch):
@@ -116,16 +116,16 @@ def test_connection_name_from_environment_and_mapping(monkeypatch):
         server_certificate="server.der",
     )
     assert config.name == "datacol1"
-    assert config.certificate == "data/opcua/datacol1/client-certificate.der"
+    assert config.certificate == "data/opcua/client-certificate.der"
     mapped = OpcUaConfig.from_mapping(
         {"endpoint": config.endpoint, "name": "datacol2", "server_certificate": "server.der"},
         prefix="UNUSED_TEST_OPCUA_",
     )
-    assert mapped.private_key == "data/opcua/datacol2/client-private-key.pem"
+    assert mapped.private_key == "data/opcua/client-private-key.pem"
 
 
 @pytest.mark.parametrize("name", [None, "", "../outside", "a\\b"])
-def test_connection_name_rejects_invalid_path_components(name):
+def test_connection_name_validation(name):
     with pytest.raises(ValueError, match="OPC UA name"):
         OpcUaConfig(endpoint="opc.tcp://localhost:4840", name=name, security_policy="None")
 
@@ -177,3 +177,37 @@ def test_force_flag_rejects_truthy_strings():
             server_certificate="server.der",
             force_certificate_regeneration="false",
         )
+
+
+def test_named_connections_share_identity_during_concurrent_preparation(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from dataclasses import replace
+    from pathlib import Path
+
+    pytest.importorskip("asyncua")
+    monkeypatch.chdir(tmp_path)
+    config = OpcUaConfig(
+        endpoint="opc.tcp://localhost:4840",
+        name="datacol1",
+        application_uri="urn:test:shared",
+        server_certificate="datacol1-server.der",
+    )
+    other = replace(
+        config,
+        name="datacol2",
+        endpoint="opc.tcp://localhost:4841",
+        server_certificate="datacol2-server.der",
+    )
+    clients = [OpcUaClient(settings) for settings in (config, other)]
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(lambda client: client._prepare_certificate(), clients))
+        key, cert = Path(config.private_key), Path(config.certificate)
+        original = key.read_bytes(), cert.read_bytes()
+        assert Path(other.private_key) == key and Path(other.certificate) == cert
+        generate_application_certificate(key, cert, application_uri=config.application_uri)
+        assert (key.read_bytes(), cert.read_bytes()) == original
+        assert set(Path("data/opcua").iterdir()) == {key, cert}
+    finally:
+        for client in clients:
+            client.close()

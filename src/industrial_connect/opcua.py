@@ -18,6 +18,7 @@ from .errors import ConnectionError, DependencyError, OperationError, _cleanup
 from .logging import get_logger
 
 logger = get_logger(__name__)
+_certificate_lock = RLock()
 
 
 def _subscription_log_filter(record: logging.LogRecord) -> bool:
@@ -57,13 +58,9 @@ class OpcUaConfig(EnvConfig):
         if not isinstance(self.name, str) or not fullmatch(r"[A-Za-z0-9_-]+", self.name):
             raise ValueError("OPC UA name must use letters, digits, underscores or hyphens")
         if self.certificate is None:
-            object.__setattr__(
-                self, "certificate", f"data/opcua/{self.name}/client-certificate.der"
-            )
+            object.__setattr__(self, "certificate", "data/opcua/client-certificate.der")
         if self.private_key is None:
-            object.__setattr__(
-                self, "private_key", f"data/opcua/{self.name}/client-private-key.pem"
-            )
+            object.__setattr__(self, "private_key", "data/opcua/client-private-key.pem")
         if any(
             type(flag) is not bool
             for flag in (self.auto_generate_certificate, self.force_certificate_regeneration)
@@ -150,23 +147,27 @@ def generate_application_certificate(
     key_file, certificate_file = Path(key_file), Path(certificate_file)
     if key_file.resolve() == certificate_file.resolve():
         raise ValueError("Certificate and private key need distinct paths")
-    client = require("asyncua.sync", "opcua").Client("opc.tcp://localhost:4840")
-    try:
-        client.application_uri = application_uri
-        if force:
-            # Stage the replacement so generation failures preserve the existing certificate.
-            certificate_file.parent.mkdir(parents=True, exist_ok=True)
-            with TemporaryDirectory(dir=certificate_file.parent) as directory:
-                replacement = Path(directory) / "certificate.der"
-                client.setup_self_signed_certificate(key_file, replacement, host_name=host_name)
-                replacement.replace(certificate_file)
-            return certificate_file, key_file
-        return client.setup_self_signed_certificate(key_file, certificate_file, host_name=host_name)
-    except Exception as exc:
-        raise OperationError("Could not prepare OPC UA application certificate") from exc
-    finally:
-        # No session exists; stop the sync wrapper's event-loop thread explicitly.
-        _cleanup(client.tloop.stop, "OPC UA certificate worker cleanup also failed")
+    # Connections in this process may share one application identity.
+    with _certificate_lock:
+        client = require("asyncua.sync", "opcua").Client("opc.tcp://localhost:4840")
+        try:
+            client.application_uri = application_uri
+            if force:
+                # Stage the replacement so generation failures preserve the existing certificate.
+                certificate_file.parent.mkdir(parents=True, exist_ok=True)
+                with TemporaryDirectory(dir=certificate_file.parent) as directory:
+                    replacement = Path(directory) / "certificate.der"
+                    client.setup_self_signed_certificate(key_file, replacement, host_name=host_name)
+                    replacement.replace(certificate_file)
+                return certificate_file, key_file
+            return client.setup_self_signed_certificate(
+                key_file, certificate_file, host_name=host_name
+            )
+        except Exception as exc:
+            raise OperationError("Could not prepare OPC UA application certificate") from exc
+        finally:
+            # No session exists; stop the sync wrapper's event-loop thread explicitly.
+            _cleanup(client.tloop.stop, "OPC UA certificate worker cleanup also failed")
 
 
 class _Handler:
