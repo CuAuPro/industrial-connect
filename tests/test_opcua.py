@@ -285,7 +285,9 @@ def test_certificate_generation_is_explicit_and_identity_matches(tmp_path):
     assert "urn:test:client" in san.get_values_for_type(x509.UniformResourceIdentifier)
 
 
-@pytest.mark.parametrize("policy", ["Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"])
+@pytest.mark.parametrize(
+    "policy", ["Basic256", "Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"]
+)
 def test_secure_client_with_pin_validates_identity(tmp_path, policy):
     from industrial_connect.opcua import generate_application_certificate
 
@@ -318,7 +320,9 @@ def test_secure_client_with_pin_validates_identity(tmp_path, policy):
         raw.tloop.stop()
 
 
-@pytest.mark.parametrize("policy", ["Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"])
+@pytest.mark.parametrize(
+    "policy", ["Basic256", "Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"]
+)
 def test_pinned_certificate_validator_rejects_another_certificate(tmp_path, policy):
     import asyncio
 

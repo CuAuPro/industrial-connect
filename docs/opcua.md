@@ -75,7 +75,9 @@ subscription. Events have `kind` (`data`, `subscription_failed`, `disconnect`),
 failures appear individually as `subscription_failed` events.
 
 The default policy is `Basic256Sha256` with `SignAndEncrypt`. Other supported secure
-policies are `Aes128Sha256RsaOaep` and `Aes256Sha256RsaPss`. All secure policies require
+policies are `Aes128Sha256RsaOaep` and `Aes256Sha256RsaPss`.
+`Basic256` is also supported when explicitly configured for older servers; it is a
+legacy policy and is never selected as an automatic fallback. All secure policies require
 application certificates. An optional `server_certificate` enables pinning. With a pin, validation checks
 the server certificate fingerprint, validity period, application URI and server extended
 key usage. Pin renewal is an application deployment action; there is no automatic trust

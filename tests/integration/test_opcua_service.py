@@ -53,7 +53,9 @@ def test_opcua_real_read_write_subscription_and_cleanup(service):
 
 
 @pytest.mark.parametrize("service", ["opcua"], indirect=True)
-@pytest.mark.parametrize("policy", ["Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"])
+@pytest.mark.parametrize(
+    "policy", ["Basic256", "Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"]
+)
 @pytest.mark.parametrize("pinned", [True, False])
 def test_opcua_secure_certificate_handshake(service, tmp_path, policy, pinned):
     from asyncua import ua

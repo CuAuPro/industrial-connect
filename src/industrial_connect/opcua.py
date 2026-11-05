@@ -75,6 +75,7 @@ class OpcUaConfig(EnvConfig):
             raise ValueError("Timeout, reconnect interval and capacity must be positive")
         if self.security_policy not in {
             "None",
+            "Basic256",
             "Basic256Sha256",
             "Aes128Sha256RsaOaep",
             "Aes256Sha256RsaPss",
